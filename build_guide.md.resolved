@@ -1,0 +1,506 @@
+# 🚦 Build Guide — Smart Traffic Monitoring System v2
+
+Hướng dẫn xây dựng từng bước, theo thứ tự **từ nền tảng lên trên**.
+
+> **Stack:** FastAPI · SQLAlchemy · Alembic · Google OAuth2 · LangGraph · React + Vite · Docker
+
+### Tại sao làm theo thứ tự này?
+
+Mỗi giai đoạn phụ thuộc vào giai đoạn trước. Ví dụ: không thể làm Traffic API nếu Workers chưa chạy, không thể test Auth nếu Database chưa có bảng `users`. Thứ tự này đảm bảo bạn **luôn có thứ gì đó chạy được** sau mỗi giai đoạn — tránh tình trạng code nhiều mà không test được.
+
+```
+Database → Auth → Workers → API → Frontend
+   ↑           ↑        ↑       ↑        ↑
+ Nền tảng   Bảo mật  Dữ liệu  Logic    Giao diện
+```
+
+---
+
+## Giai đoạn 0 — Chuẩn bị (Không cần code)
+
+> **Mục tiêu:** Có đủ credentials và cấu hình TRƯỚC khi viết dòng code đầu tiên.
+> Nếu thiếu bước này, bạn sẽ code xong lại phải quay lại sửa config — mất công.
+
+### Bước 0.1 — Tạo Google OAuth Credentials
+1. Vào [console.cloud.google.com](https://console.cloud.google.com)
+2. **APIs & Services → Credentials → Create → OAuth 2.0 Client ID**
+3. Application type: **Web application**
+4. Authorized redirect URIs: `http://localhost:8000/api/v1/auth/google/callback`
+5. Lưu `GOOGLE_CLIENT_ID` và `GOOGLE_CLIENT_SECRET`
+
+### Bước 0.2 — Tạo thư mục project
+```
+e:\DATN\smart_object_tracking\smart-traffic-v2\
+├── backend\
+└── frontend\
+```
+
+### Bước 0.3 — Tạo [.env](file:///e:/DATN/smart_object_tracking/Smart-Traffic-Monitoring-System/backend/.env) cho backend
+```env
+# Database
+DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/traffic_db
+
+# JWT
+JWT_SECRET_KEY=your_super_secret_key_here
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_DAYS=7
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:8000/api/v1/auth/google/callback
+
+# Frontend
+URL_FRONTEND=http://localhost:5173
+
+# AI
+GOOGLE_API_KEY=your_gemini_api_key
+
+# App
+DEVICE=cpu
+MODELS_PATH=./ai_models/best_int8_openvino_model
+```
+
+---
+
+## Giai đoạn 1 — Backend Foundation
+
+> **Mục tiêu:** Dựng khung sườn backend — cấu hình, kết nối DB, cấu trúc thư mục.
+>
+> **Tại sao làm đầu tiên?** Mọi giai đoạn sau đều `import` từ [core/config.py](file:///e:/DATN/smart_object_tracking/Smart-Traffic-Monitoring-System/backend/app/core/config.py) và `core/database.py`.
+> Nếu 2 file này sai → toàn bộ project lỗi. Làm đúng từ đầu tiết kiệm rất nhiều thời gian debug.
+
+### Bước 1.1 — Khởi tạo môi trường Python
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate          # Windows
+pip install fastapi uvicorn[standard] sqlalchemy[asyncio] asyncpg \
+            alembic python-dotenv authlib httpx pydantic-settings \
+            python-jose[cryptography] bcrypt
+```
+
+### Bước 1.2 — Tạo cấu trúc thư mục backend
+```
+backend/
+└── app/
+    ├── api/v1/
+    │   ├── __init__.py
+    │   ├── dependencies.py   ← get_db, get_current_user, require_admin
+    │   ├── auth.py
+    │   ├── traffic.py
+    │   ├── chat.py
+    │   └── admin.py
+    ├── core/
+    │   ├── config.py         ← Pydantic BaseSettings đọc .env
+    │   ├── database.py       ← SQLAlchemy async engine + SessionLocal
+    │   └── security.py       ← JWT encode/decode, OAuth helpers
+    ├── models/
+    │   ├── base.py           ← DeclarativeBase
+    │   ├── user.py
+    │   └── chat.py
+    ├── schemas/
+    │   ├── auth.py
+    │   ├── traffic.py
+    │   └── chat.py
+    ├── repositories/
+    │   ├── user_repo.py
+    │   └── chat_repo.py
+    ├── services/
+    │   ├── auth_service.py
+    │   └── chat_service.py
+    ├── workers/
+    │   └── video_processor.py   ← copy & refactor từ project cũ
+    ├── ai/
+    │   ├── detector.py          ← copy & refactor từ project cũ
+    │   └── chatbot_agent.py     ← copy & refactor từ project cũ
+    ├── utils/
+    │   └── transport_utils.py
+    └── main.py
+```
+
+### Bước 1.3 — [core/config.py](file:///e:/DATN/smart_object_tracking/Smart-Traffic-Monitoring-System/backend/app/core/config.py)
+Dùng `pydantic-settings` thay vì class thông thường:
+```python
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    DATABASE_URL: str
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_DAYS: int = 7
+    GOOGLE_CLIENT_ID: str
+    GOOGLE_CLIENT_SECRET: str
+    GOOGLE_REDIRECT_URI: str
+    URL_FRONTEND: str
+    GOOGLE_API_KEY: str
+    DEVICE: str = "cpu"
+    MODELS_PATH: str
+
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
+```
+
+### Bước 1.4 — `core/database.py`
+```python
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+
+engine = create_async_engine(settings.DATABASE_URL, echo=False)
+AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+
+async def get_db() -> AsyncSession:   # dependency injection
+    async with AsyncSessionLocal() as session:
+        yield session
+```
+
+---
+
+## Giai đoạn 2 — Database Models & Migrations
+
+> **Mục tiêu:** Định nghĩa cấu trúc dữ liệu và tạo bảng trong PostgreSQL.
+>
+> **Tại sao dùng Alembic?** Alembic giống "Git cho database" — mỗi thay đổi schema được lưu
+> thành migration file, có thể rollback khi cần. Không nên tạo bảng thủ công bằng SQL thuần.
+>
+> **Thứ tự:** Model → Schema (Pydantic) → Repository. Không được bỏ qua bước nào.
+
+### Bước 2.1 — `models/user.py`
+```python
+class User(Base):
+    __tablename__ = "users"
+    id: int (PK)
+    google_id: str (unique)
+    email: str (unique)
+    name: str
+    avatar_url: str | None
+    role: int  # 0 = admin, 1 = user
+    created_at: datetime
+```
+
+### Bước 2.2 — `models/chat.py`
+```python
+class ChatHistory(Base):
+    __tablename__ = "chat_history"
+    id: int (PK)
+    user_id: int (FK → users.id)
+    role: str  # "user" | "assistant"
+    content: str
+    created_at: datetime
+```
+
+### Bước 2.3 — Khởi tạo Alembic
+```bash
+alembic init migrations
+# Sửa alembic.ini và migrations/env.py để trỏ đến DATABASE_URL
+alembic revision --autogenerate -m "init"
+alembic upgrade head
+```
+
+---
+
+## Giai đoạn 3 — Authentication (Google OAuth + JWT)
+
+> **Mục tiêu:** Người dùng đăng nhập bằng tài khoản Google, nhận JWT để gọi các API có bảo vệ.
+>
+> **Tại sao Google OAuth thay vì username/password?**
+> - Không cần quản lý mật khẩu (không lo bị hack mật khẩu)
+> - UX tốt hơn (1 click)
+> - Tận dụng bảo mật của Google (2FA, phát hiện bot...)
+>
+> **Luồng hoạt động:**
+> ```
+> Frontend → GET /auth/google → redirect Google Login
+>     → User chọn tài khoản → Google gọi callback URL
+>     → Backend nhận code → lấy user info từ Google
+>     → Upsert DB (tạo mới nếu lần đầu) → tạo JWT
+>     → Redirect về frontend kèm token
+> ```
+>
+> **Upsert** = Update nếu đã tồn tại, Insert nếu chưa có. Đảm bảo mỗi Google account chỉ có 1 user trong DB.
+
+### Bước 3.1 — `core/security.py`
+Dùng **Authlib** để handle Google OAuth:
+```python
+from authlib.integrations.starlette_client import OAuth
+
+oauth = OAuth()
+oauth.register(
+    name="google",
+    client_id=settings.GOOGLE_CLIENT_ID,
+    client_secret=settings.GOOGLE_CLIENT_SECRET,
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_kwargs={"scope": "openid email profile"},
+)
+```
+
+JWT helpers: `create_access_token(user_id, role)`, `decode_token(token)`
+
+### Bước 3.2 — `repositories/user_repo.py`
+```python
+async def get_by_google_id(db, google_id) -> User | None
+async def get_by_id(db, user_id) -> User | None
+async def create(db, google_id, email, name, avatar_url) -> User
+async def update_role(db, user_id, role) -> User
+async def get_all(db) -> list[User]
+async def delete(db, user_id)
+```
+
+### Bước 3.3 — `api/v1/auth.py`
+```
+GET  /api/v1/auth/google           → redirect sang Google
+GET  /api/v1/auth/google/callback  → nhận code, upsert user, trả JWT
+GET  /api/v1/auth/me               → trả thông tin user (cần JWT)
+POST /api/v1/auth/logout           → xóa cookie
+```
+
+### Bước 3.4 — `api/v1/dependencies.py`
+```python
+async def get_current_user(token: str) -> User   # decode JWT → lấy user
+async def require_admin(user: User) -> User       # kiểm tra role == 0
+```
+
+> **Test ngay:** Vào `http://localhost:8000/api/v1/auth/google` → chọn tài khoản → nhận JWT
+
+---
+
+## Giai đoạn 4 — Video Workers (copy từ project cũ)
+
+> **Mục tiêu:** Tái sử dụng logic YOLO + ByteTrack từ project cũ, đặt đúng vị trí trong kiến trúc mới.
+>
+> **Tại sao không viết lại từ đầu?** Logic xử lý video đã hoạt động tốt và được tối ưu. Chỉ cần
+> refactor tên class và đường import cho phù hợp với cấu trúc mới.
+>
+> **Tại sao dùng `lifespan` thay vì `@app.on_event`?**
+> `@app.on_event` đã bị deprecated trong FastAPI mới. `lifespan` là cách chuẩn hiện tại,
+> đảm bảo startup/shutdown được gọi đúng thứ tự và có thể dùng `yield`.
+>
+> **Tại sao đặt processor vào `app.state`?**
+> Để tránh global variable — `app.state` là nơi FastAPI cung cấp để lưu shared state,
+> có thể inject vào bất kỳ route nào qua `request.app.state.processor`.
+
+### Bước 4.1 — `ai/detector.py`
+Copy và đổi tên:
+- [AnalyzeOnRoadBase](file:///e:/DATN/smart_object_tracking/Smart-Traffic-Monitoring-System/backend/app/services/road_services/AnalyzeOnRoadBase.py#13-366) → `RoadDetectorBase`
+- [AnalyzeOnRoad](file:///e:/DATN/smart_object_tracking/Smart-Traffic-Monitoring-System/backend/app/services/road_services/AnalyzeOnRoad.py#8-71) → `RoadDetector`
+
+Import từ `app.core.config` thay vì import cũ.
+
+### Bước 4.2 — `workers/video_processor.py`
+Copy và đổi tên:
+- [AnalyzeOnRoadForMultiprocessing](file:///e:/DATN/smart_object_tracking/Smart-Traffic-Monitoring-System/backend/app/services/road_services/AnalyzeOnRoadForMultiProcessing.py#18-191) → `VideoProcessorPool`
+
+Thêm method `get_names()` trả về danh sách tên đường.
+
+### Bước 4.3 — Tích hợp vào [main.py](file:///e:/DATN/smart_object_tracking/Smart-Traffic-Monitoring-System/backend/app/main.py) qua `lifespan`
+```python
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup
+    app.state.processor = VideoProcessorPool()
+    app.state.processor.run_multiprocessing()
+    yield
+    # shutdown
+    app.state.processor.cleanup_processes()
+
+app = FastAPI(lifespan=lifespan)
+```
+
+---
+
+## Giai đoạn 5 — Traffic API
+
+> **Mục tiêu:** Expose dữ liệu từ Workers ra ngoài qua REST và WebSocket.
+>
+> **Tại sao cần cả REST lẫn WebSocket?**
+> - **REST** (`GET /info`): dùng khi chỉ cần lấy 1 lần — chatbot tool, load lần đầu
+> - **WebSocket** (`/ws/info`): dùng khi cần cập nhật liên tục — dashboard realtime
+>
+> **Tại sao stream frames ở 30fps nhưng metrics chỉ ở 50fps?**
+> Frames là JPEG (~10-50KB/frame) → cần rate phù hợp với bandwidth.
+> Metrics là JSON nhỏ (~100 bytes) → có thể push nhanh hơn.
+>
+> **`asyncio.to_thread()`**: Hàm [get_frame_road()](file:///e:/DATN/smart_object_tracking/Smart-Traffic-Monitoring-System/backend/app/api/v1/api_vehicles_frames.py#127-153) của Worker là **blocking** (đọc shared memory).
+> Phải wrap bằng `asyncio.to_thread()` để không block event loop của FastAPI.
+
+### Bước 5.1 — `api/v1/traffic.py`
+```
+GET  /api/v1/roads                    → danh sách tuyến đường
+GET  /api/v1/roads/{name}/info        → metrics (count, speed, density)
+GET  /api/v1/roads/{name}/frame       → JPEG frame hiện tại  [JWT]
+WS   /ws/roads/{name}/frames          → stream frames ~30fps  [JWT]
+WS   /ws/roads/{name}/info            → stream metrics ~50fps [JWT]
+```
+
+> **Test ngay:** `GET /api/v1/roads` → phải trả về 5 tên đường. WebSocket xem frames.
+
+---
+
+## Giai đoạn 6 — AI Chatbot
+
+> **Mục tiêu:** AI Agent có thể trả lời câu hỏi về tình trạng giao thông bằng tiếng Việt,
+> dựa trên dữ liệu **real-time** từ Workers.
+>
+> **Tại sao dùng ReAct Agent thay vì gọi LLM thẳng?**
+> LLM thông thường chỉ trả lời từ kiến thức được train — không biết tình trạng thực tế.
+> ReAct Agent cho phép LLM **gọi tool** (hàm Python thực) để lấy dữ liệu trước khi trả lời:
+> ```
+> User: "Đường Láng đang kẹt không?"
+>     → LLM: "Tôi cần dữ liệu" → gọi tool get_info_road("Đường Láng")
+>     → Tool trả về: {count_motor: 45, speed_motor: 8 km/h}
+>     → LLM tổng hợp: "Đường Láng đang đông, xe máy 8 km/h..."
+> ```
+>
+> **Tại sao lưu chat history vào DB thay vì localStorage?**
+> localStorage chỉ tồn tại trên 1 trình duyệt. DB giúp user xem lại lịch sử
+> trên mọi thiết bị và không mất khi xóa cache.
+
+### Bước 6.1 — `ai/chatbot_agent.py`
+Copy từ project cũ, cập nhật import. Tools [get_info_road](file:///e:/DATN/smart_object_tracking/Smart-Traffic-Monitoring-System/backend/app/api/v1/api_vehicles_frames.py#105-126), [get_frame_road](file:///e:/DATN/smart_object_tracking/Smart-Traffic-Monitoring-System/backend/app/api/v1/api_vehicles_frames.py#127-153) đọc từ `app.state.processor`.
+
+### Bước 6.2 — `repositories/chat_repo.py`
+```python
+async def save_message(db, user_id, role, content)
+async def get_history(db, user_id) -> list[ChatHistory]
+async def clear_history(db, user_id)
+```
+
+### Bước 6.3 — `api/v1/chat.py`
+```
+POST   /api/v1/chat            → gửi message, nhận response [JWT]
+GET    /api/v1/chat/history    → lịch sử chat [JWT]
+DELETE /api/v1/chat/history    → xóa lịch sử [JWT]
+```
+
+---
+
+## Giai đoạn 7 — Admin API
+
+> **Mục tiêu:** Cho phép admin quản lý users và theo dõi tài nguyên hệ thống.
+>
+> **Tại sao để Admin API ở cuối?** Admin cần biết User đã tồn tại (Giai đoạn 3) để quản lý.
+> Ngoài ra admin là tính năng "nice to have" — core system phải hoạt động trước.
+>
+> **Phân quyền:** Dependency `require_admin` sẽ kiểm tra `user.role == 0`.
+> Nếu không phải admin → trả về `403 Forbidden`. Áp dụng cho tất cả routes trong file này.
+
+### Bước 7.1 — `api/v1/admin.py`
+```
+GET    /api/v1/admin/users             → danh sách users  [Admin]
+PUT    /api/v1/admin/users/{id}/role   → đổi role         [Admin]
+DELETE /api/v1/admin/users/{id}        → xóa user         [Admin]
+GET    /api/v1/admin/resources         → CPU, RAM, Disk   [Admin]
+WS     /ws/admin/resources             → stream metrics   [Admin]
+```
+
+---
+
+## Giai đoạn 8 — Frontend (React + Vite)
+
+> **Mục tiêu:** Xây dựng giao diện web cho người dùng cuối.
+>
+> **Tại sao làm CUỐI CÙNG?** Frontend chỉ là lớp hiển thị — nó **phụ thuộc 100%** vào API backend.
+> Làm frontend trước khi có API là lãng phí thời gian vì không test được gì.
+>
+> **Nguyên tắc khi code Frontend với Backend riêng (SPA):**
+> - Tất cả dữ liệu lấy từ API — không hardcode
+> - JWT token lưu trong `localStorage` hoặc `httpOnly cookie`
+> - `ProtectedRoute` kiểm tra token trước khi render trang
+> - **CORS** phải được cấu hình đúng ở backend
+>
+> **Thứ tự xây dựng trang:** Login → Home → Stats → Chat → Admin
+> (theo mức độ phức tạp tăng dần)
+
+### Bước 8.1 — Khởi tạo project
+```bash
+cd frontend
+npm create vite@latest . -- --template react-ts
+npm install react-router-dom axios recharts lucide-react
+```
+
+### Bước 8.2 — Cấu trúc trang & routing
+| Route | Component | Auth |
+|---|---|---|
+| `/login` | `LoginPage` | Public |
+| `/home` | `HomePage` | User+ |
+| `/stats` | `StatsPage` | User+ |
+| `/chat` | `ChatPage` | User+ |
+| `/admin` | `AdminPage` | Admin only |
+
+### Bước 8.3 — Login Flow (Google OAuth)
+```
+Click "Đăng nhập Google"
+    → window.location.href = "http://localhost:8000/api/v1/auth/google"
+    → Google redirect về callback
+    → Backend set cookie / trả token
+    → Redirect về http://localhost:5173/home
+```
+
+### Bước 8.4 — `ProtectedRoute` component
+```tsx
+// Nếu chưa login → redirect /login
+// Nếu cần admin nhưng không phải admin → redirect /home
+```
+
+### Bước 8.5 — Các trang theo thứ tự
+1. **LoginPage** — nút "Sign in with Google"
+2. **HomePage** — grid cards các tuyến đường + WebSocket frame
+3. **StatsPage** — biểu đồ xe/tốc độ (Recharts)
+4. **ChatPage** — chat interface với AI
+5. **AdminPage** — bảng users, đổi role, system metrics
+
+---
+
+## Giai đoạn 9 — Docker & Deploy
+
+> **Mục tiêu:** Đóng gói toàn bộ hệ thống để chạy bằng 1 lệnh duy nhất trên bất kỳ máy nào.
+>
+> **Tại sao dùng Docker?**
+> - Đảm bảo môi trường giống nhau giữa dev và production
+> - Không cần cài PostgreSQL thủ công trên mỗi máy
+> - Dễ demo và bàn giao (chỉ cần có Docker)
+>
+> **Lưu ý:** Khi dùng Docker Compose, Google OAuth redirect URI phải khớp.
+> Trong [.env](file:///e:/DATN/smart_object_tracking/Smart-Traffic-Monitoring-System/backend/.env): `GOOGLE_REDIRECT_URI=http://localhost:8000/api/v1/auth/google/callback`
+
+### Bước 9.1 — [docker-compose.yml](file:///e:/DATN/smart_object_tracking/Smart-Traffic-Monitoring-System/docker-compose.yml)
+```yaml
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: traffic_db
+      POSTGRES_PASSWORD: password
+    ports: ["5432:5432"]
+
+  backend:
+    build: ./backend
+    ports: ["8000:8000"]
+    depends_on: [postgres]
+    env_file: ./backend/.env
+
+  frontend:
+    build: ./frontend
+    ports: ["5173:80"]
+    depends_on: [backend]
+```
+
+### Bước 9.2 — Chạy
+```bash
+docker compose up --build
+```
+
+---
+
+## Thứ tự ưu tiên khi bị lỗi
+
+```
+1. Core (config, database) → phải chạy trước tất cả
+2. Auth → phải hoạt động trước khi test bất kỳ API nào có JWT
+3. Workers → phải start trước Traffic API
+4. Traffic API → phải chạy trước khi test Frontend
+5. Frontend → cuối cùng
+```
