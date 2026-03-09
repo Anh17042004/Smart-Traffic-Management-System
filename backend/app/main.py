@@ -7,6 +7,7 @@ os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
 
 from app.core.config import settings
@@ -29,10 +30,10 @@ async def lifespan(app: FastAPI):
     app.state.processor.run_multiprocessing()
     print(f"✅ Đang xử lý {len(app.state.processor.names)} tuyến đường.")
 
-    # Khởi tạo AI Chatbot Agent
+    # Khởi tạo AI Chatbot Agent (pass pool để tools truy cập data trực tiếp)
     print("🤖 Khởi tạo AI Chatbot Agent...")
     from app.ai.chatbot_agent import ChatBotAgent
-    app.state.chatbot = ChatBotAgent()
+    app.state.chatbot = ChatBotAgent(pool=app.state.processor)
     print("✅ AI Chatbot sẵn sàng.")
 
     yield  # ← Server chạy ở đây
@@ -57,9 +58,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# SessionMiddleware PHẢI đặt trước CORSMiddleware
+# authlib dùng session để lưu state OAuth2 (chống CSRF)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.JWT_SECRET_KEY,  # tái dụng JWT secret
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[settings.URL_FRONTEND],  # chỉ cho phép frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

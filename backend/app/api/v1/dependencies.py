@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, WebSocket, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,16 +14,7 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Dependency: Xác thực JWT token và trả về User hiện tại.
-    
-    Dùng trong route:
-        async def my_route(user: User = Depends(get_current_user)):
-            ...
-    
-    Raises:
-        401 nếu không có token hoặc token không hợp lệ
-        404 nếu user không tồn tại trong DB
-    """
+    """Dependency: Xác thực JWT token và trả về User hiện tại."""
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -38,25 +29,44 @@ async def get_current_user(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy tài khoản.",
-        )
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản.")
+    return user
+
+
+async def get_current_user_ws(
+    websocket: WebSocket,
+    token: str = Query(..., description="JWT token — gửi qua ?token=<jwt>"),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Dependency dành cho WebSocket — auth qua query param ?token=...
+
+    WebSocket không hỗ trợ custom HTTP headers trong trình duyệt
+    (browser không cho phép đặt Authorization header khi kết nối WS),
+    nên phải truyền token qua query param.
+
+    Ví dụ:
+        ws://localhost:8000/api/v1/ws/roads/Đường Láng/frames?token=eyJ...
+    """
+    try:
+        payload = decode_token(token)
+        user_id = payload["user_id"]
+    except Exception:
+        await websocket.close(code=4001)
+        raise HTTPException(status_code=401, detail="Token không hợp lệ.")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        await websocket.close(code=4004)
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản.")
     return user
 
 
 async def require_admin(
     current_user: User = Depends(get_current_user),
 ) -> User:
-    """Dependency: Chỉ cho phép admin truy cập.
-    
-    Dùng trong route admin:
-        async def admin_route(user: User = Depends(require_admin)):
-            ...
-    
-    Raises:
-        403 nếu user không phải admin (role != 0)
-    """
+    """Dependency: Chỉ cho phép admin truy cập."""
     if not current_user.is_admin():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
