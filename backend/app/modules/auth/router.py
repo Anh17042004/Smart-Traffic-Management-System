@@ -1,41 +1,28 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.config import Config
-from starlette.middleware.sessions import SessionMiddleware
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import oauth, create_access_token
-from app.repositories import user_repo
-from app.schemas.auth import UserOut, TokenResponse
-from app.api.v1.dependencies import get_current_user
-from app.models.user import User
+from app.modules.auth import repo as user_repo
+from app.modules.auth.schemas import UserOut, TokenResponse
+from app.modules.auth.models import User
+from app.core.dependencies import get_current_user
 
 router = APIRouter()
 
 
 @router.get("/auth/google")
 async def login_google(request: Request):
-    """Redirect sang trang đăng nhập Google.
-    
-    Frontend gọi: window.location.href = '/api/v1/auth/google'
-    """
+    """Redirect sang trang đăng nhập Google."""
     redirect_uri = settings.GOOGLE_REDIRECT_URI
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
 @router.get("/auth/google/callback")
 async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
-    """Google gọi về đây sau khi user đăng nhập.
-    
-    Flow:
-    1. Lấy token từ Google
-    2. Lấy thông tin user (email, name, avatar)
-    3. Upsert user vào DB
-    4. Tạo JWT
-    5. Redirect về frontend kèm token
-    """
+    """Google gọi về đây sau khi user đăng nhập."""
     try:
         token = await oauth.google.authorize_access_token(request)
     except Exception as e:
@@ -44,41 +31,30 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
             detail=f"Lỗi xác thực Google: {str(e)}"
         )
 
-    # Lấy thông tin user từ Google
     user_info = token.get("userinfo")
     if not user_info:
         user_info = await oauth.google.userinfo(token=token)
 
-    google_id = user_info["sub"]        # ID duy nhất từ Google
+    google_id = user_info["sub"]
     email = user_info["email"]
     name = user_info.get("name", email)
     avatar_url = user_info.get("picture")
 
-    # Upsert user vào DB
     user = await user_repo.upsert(db, google_id, email, name, avatar_url)
 
-    # Tạo JWT token
     access_token = create_access_token(user_id=user.id, role=user.role)
 
-    # Redirect về frontend kèm token trong query param
     frontend_url = f"{settings.URL_FRONTEND}/auth/callback?token={access_token}"
     return RedirectResponse(url=frontend_url)
 
 
 @router.get("/auth/me", response_model=UserOut)
 async def get_me(current_user: User = Depends(get_current_user)):
-    """Trả về thông tin user hiện tại từ JWT token.
-    
-    Frontend dùng để kiểm tra login status và lấy thông tin user.
-    """
+    """Trả về thông tin user hiện tại từ JWT token."""
     return current_user
 
 
 @router.post("/auth/logout")
 async def logout():
-    """Đăng xuất.
-    
-    Vì JWT là stateless, server không cần làm gì.
-    Frontend tự xóa token khỏi localStorage.
-    """
+    """Đăng xuất."""
     return {"message": "Đăng xuất thành công. Vui lòng xóa token phía client."}

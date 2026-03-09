@@ -181,7 +181,7 @@ class VideoProcessorPool:
         if road_name not in self.names:
             return b""
         raw = self.shared_data[road_name]["frame"].get("frame", b"")
-        return convert_frame_to_byte(raw) or b""
+        return raw if isinstance(raw, bytes) else b""
 
     def get_info_road(self, road_name: str) -> dict:
         """Lấy thông tin phương tiện hiện tại của tuyến đường.

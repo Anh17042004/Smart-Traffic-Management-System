@@ -1,21 +1,10 @@
-"""
-api/v1/traffic.py
-Refactored từ api_vehicles_frames.py
-
-Endpoints:
-  GET  /roads                    → danh sách tuyến đường (public)
-  GET  /roads/{name}/info        → metrics tuyến đường (public)
-  GET  /roads/{name}/frame       → JPEG frame hiện tại (yêu cầu auth)
-  WS   /ws/roads/{name}/frames   → stream JPEG frames (yêu cầu auth)
-  WS   /ws/roads/{name}/info     → stream metrics JSON (yêu cầu auth)
-"""
 import asyncio
 
 from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, Response
 
-from app.api.v1.dependencies import get_current_user, get_current_user_ws
-from app.models.user import User
+from app.core.dependencies import get_current_user, get_current_user_ws
+from app.modules.auth.models import User
 from app.utils.transport_utils import enrich_info_with_thresholds
 
 router = APIRouter()
@@ -32,26 +21,14 @@ def _get_pool(request: Request):
 
 @router.get("/roads", summary="Danh sách tuyến đường đang giám sát (public)")
 async def get_road_names(request: Request):
-    """Trả về list tên tuyến đường. Không cần đăng nhập.
-    
-    Frontend dùng để load danh sách đường ngay khi vào trang.
-    """
+    """Trả về list tên tuyến đường. Không cần đăng nhập."""
     pool = _get_pool(request)
     return JSONResponse(content={"road_names": pool.get_names()})
 
 
 @router.get("/roads/{road_name}/info", summary="Metrics tuyến đường (public)")
 async def get_road_info(road_name: str, request: Request):
-    """Trả về thông tin xe cộ của tuyến đường.
-
-    Response:
-        count_car: Số ô tô
-        count_motor: Số xe máy
-        speed_car: Tốc độ TB ô tô (km/h)
-        speed_motor: Tốc độ TB xe máy (km/h)
-        density_status: "Thông thoáng" | "Đông đúc" | "Tắc nghẽn"
-        speed_status: "Nhanh chóng" | "Chậm chạp"
-    """
+    """Trả về thông tin xe cộ của tuyến đường."""
     pool = _get_pool(request)
     data = await asyncio.to_thread(pool.get_info_road, road_name)
     if not data:
@@ -66,10 +43,7 @@ async def get_road_frame(
     request: Request,
     current_user: User = Depends(get_current_user),
 ):
-    """Trả về 1 JPEG frame hiện tại của tuyến đường.
-    
-    Yêu cầu: Authorization: Bearer <token>
-    """
+    """Trả về 1 JPEG frame hiện tại của tuyến đường."""
     pool = _get_pool(request)
     frame_bytes = await asyncio.to_thread(pool.get_frame_road, road_name)
     if not frame_bytes:
@@ -87,11 +61,7 @@ async def ws_stream_frames(
     road_name: str,
     current_user: User = Depends(get_current_user_ws),
 ):
-    """WebSocket stream JPEG frames (~30fps).
-    
-    Auth: gửi token qua query param: ?token=...
-    Client nhận: binary bytes JPEG, hiển thị bằng <img src="blob:...">
-    """
+    """WebSocket stream JPEG frames (~30fps)."""
     pool = websocket.app.state.processor
     await websocket.accept()
     try:
@@ -113,11 +83,7 @@ async def ws_stream_info(
     road_name: str,
     current_user: User = Depends(get_current_user_ws),
 ):
-    """WebSocket stream metrics JSON (~20fps).
-    
-    Auth: gửi token qua query param: ?token=...
-    Client nhận: JSON {count_car, count_motor, speed_car, speed_motor, density_status, ...}
-    """
+    """WebSocket stream metrics JSON (~20fps)."""
     pool = websocket.app.state.processor
     await websocket.accept()
     try:

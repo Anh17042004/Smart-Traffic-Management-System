@@ -8,7 +8,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.checkpoint.memory import InMemorySaver
 
 from app.core.config import settings
-from app.schemas.chat import ChatResponse
+from app.modules.chat.schemas import ChatResponse
 
 # ─────────────────────────────────────────────
 # System Prompt

@@ -30,10 +30,10 @@ async def get_db() -> AsyncSession:
 
 async def create_tables():
     """Tạo tất cả bảng trong DB (dùng khi startup, thay thế Alembic trong dev nhanh)."""
-    from app.models.base import Base
+    from app.core.base import Base
     # Import tất cả models để Base biết cần tạo bảng nào
-    import app.models.user   # noqa
-    import app.models.chat   # noqa
+    import app.modules.auth.models   # noqa
+    import app.modules.chat.models   # noqa
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

@@ -312,7 +312,12 @@ class RoadDetector(RoadDetectorBase):
     def update_for_frame(self):
         """Ghi frame hiện tại (dạng bytes) vào frame_dict để API đọc."""
         try:
-            self.frame_dict["frame"] = self.frame_output
+            # Encode NumPy array sang JPEG ngay trong child process!
+            # Tiết kiệm chi phí serialize (IPC pickle array 1MB xuống còn string bytes ~50KB)
+            # và giải phóng Main process không phải encode liên tục.
+            success, jpeg = cv2.imencode('.jpg', self.frame_output, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            if success:
+                self.frame_dict["frame"] = jpeg.tobytes()
         except Exception as e:
             print(f"Lỗi update_for_frame {self.name}: {e}")
 

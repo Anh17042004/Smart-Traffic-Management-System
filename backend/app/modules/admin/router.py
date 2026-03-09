@@ -1,27 +1,14 @@
-"""
-api/v1/admin.py
-Admin-only endpoints. Tất cả routes yêu cầu role=0 (admin).
-
-Endpoints:
-  GET    /admin/users              → Danh sách tất cả users
-  GET    /admin/users/{id}         → Chi tiết 1 user
-  PATCH  /admin/users/{id}/role    → Đổi role (0=admin, 1=user)
-  DELETE /admin/users/{id}         → Xóa user
-  GET    /admin/system             → CPU/RAM/disk của server
-  GET    /admin/roads              → Trạng thái tất cả tuyến đường
-"""
 import psutil
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.dependencies import get_current_user, require_admin
+from app.core.dependencies import get_current_user, require_admin
 from app.core.database import get_db
-from app.models.user import User
-from app.repositories import user_repo
-from app.schemas.auth import RoleUpdate, UserOut
+from app.modules.auth.models import User
+from app.modules.auth import repo as user_repo
+from app.modules.auth.schemas import RoleUpdate, UserOut
 
 router = APIRouter()
-
 
 # ─────────────────────────────────────────────
 # User Management
@@ -56,13 +43,7 @@ async def update_role(
     db: AsyncSession = Depends(get_db),
     current_admin: User = Depends(require_admin),
 ):
-    """Admin thay đổi role của user.
-    
-    - role=0 → admin
-    - role=1 → user thường
-    
-    Không thể tự hạ role của chính mình.
-    """
+    """Admin thay đổi role của user."""
     if user_id == current_admin.id:
         raise HTTPException(status_code=400, detail="Không thể tự thay đổi role của chính mình.")
 
@@ -78,10 +59,7 @@ async def delete_user(
     db: AsyncSession = Depends(get_db),
     current_admin: User = Depends(require_admin),
 ):
-    """Admin xóa user khỏi hệ thống.
-    
-    Không thể tự xóa tài khoản của chính mình.
-    """
+    """Admin xóa user khỏi hệ thống."""
     if user_id == current_admin.id:
         raise HTTPException(status_code=400, detail="Không thể tự xóa tài khoản của chính mình.")
 

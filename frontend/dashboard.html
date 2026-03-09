@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Smart Traffic</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg glass-nav sticky-top navbar-dark px-3">
+        <div class="container-fluid">
+            <a class="navbar-brand text-cyan fw-bold" href="dashboard.html">
+                <i class="fa-solid fa-camera-retro me-2"></i>Smart Traffic
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item"><a class="nav-link active" href="dashboard.html">Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link" href="chat.html">AI Chat</a></li>
+                    <li class="nav-item"><a class="nav-link d-none" id="nav-admin" href="admin.html">Admin</a></li>
+                </ul>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="text-end d-none d-sm-block">
+                        <div id="user-name" class="fw-bold mb-0 text-white" style="font-size: 0.9rem;">Loading...</div>
+                    </div>
+                    <img id="user-avatar" src="https://ui-avatars.com/api/?name=User"
+                        class="rounded-circle border border-cyan" width="40" height="40" alt="Avatar">
+                    <button class="btn btn-outline-danger btn-sm" onclick="logout()">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container-fluid py-4">
+        <div class="row mb-4">
+            <div class="col">
+                <h3 class="fw-bold"><i class="fa-solid fa-video text-cyan me-2"></i>Live Cameras</h3>
+                <p class="text-muted">Giám sát các tuyến đường thời gian thực</p>
+            </div>
+        </div>
+
+        <!-- Nơi chứa Grid các camera -->
+        <div class="row g-4" id="roads-grid">
+            <!-- Loading Spinner -->
+            <div class="col-12 text-center py-5" id="loading-spinner">
+                <div class="spinner-border text-cyan pulse-glow" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="mt-3 text-muted">Đang kết nối WebSocket tới Server...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Template cho 1 Camera Card (ẩn đi, JS sẽ clone) -->
+    <template id="road-card-template">
+        <div class="col-12 col-xl-6">
+            <div class="glass-card overflow-hidden h-100">
+                <!-- Header Card -->
+                <div class="d-flex justify-content-between align-items-center p-3 border-bottom border-secondary">
+                    <h5 class="mb-0 fw-bold road-title text-cyan">Tên Đường</h5>
+                    <span class="badge rounded-pill road-status-badge">Đang tải...</span>
+                </div>
+
+                <div class="row g-0">
+                    <!-- Video Area -->
+                    <div class="col-md-7 position-relative bg-black" style="min-height: 250px;">
+                        <img class="road-video-stream w-100 h-100 object-fit-cover" alt="Video Stream">
+                        <!-- Lớp overlay khi mất kết nối -->
+                        <div
+                            class="position-absolute top-50 start-50 translate-middle text-center w-100 reconnect-overlay d-none">
+                            <i class="fa-solid fa-link-slash text-danger fa-2x mb-2"></i>
+                            <div class="small text-muted">Mất kết nối</div>
+                        </div>
+                    </div>
+
+                    <!-- Metrics Area -->
+                    <div class="col-md-5 p-3">
+                        <div class="row g-3 h-100 align-content-start">
+                            <!-- Metric 1: Ô tô -->
+                            <div class="col-6">
+                                <div
+                                    class="bg-dark bg-opacity-50 p-2 rounded text-center border border-secondary border-opacity-25 h-100">
+                                    <i class="fa-solid fa-car text-cyan mb-1"></i>
+                                    <div class="small text-muted">Ô tô</div>
+                                    <h4 class="mb-0 fw-bold count-car">0</h4>
+                                    <small class="speed-car text-muted">0 km/h</small>
+                                </div>
+                            </div>
+                            <!-- Metric 2: Xe máy -->
+                            <div class="col-6">
+                                <div
+                                    class="bg-dark bg-opacity-50 p-2 rounded text-center border border-secondary border-opacity-25 h-100">
+                                    <i class="fa-solid fa-motorcycle text-green mb-1"></i>
+                                    <div class="small text-muted">Xe máy</div>
+                                    <h4 class="mb-0 fw-bold count-motor">0</h4>
+                                    <small class="speed-motor text-muted">0 km/h</small>
+                                </div>
+                            </div>
+
+                            <!-- AI Insight -->
+                            <div class="col-12 mt-auto pt-3">
+                                <div
+                                    class="p-2 bg-black bg-opacity-25 rounded border border-cyan border-opacity-25 border-start border-3">
+                                    <div class="small text-muted mb-1"><i
+                                            class="fa-solid fa-robot text-cyan me-1"></i>Insight Tốc độ</div>
+                                    <div class="speed-status small fw-medium">Đang phân tích...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Scripts -->
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/dashboard.js"></script>
+</body>
+
+</html>

@@ -78,12 +78,15 @@ app.add_middleware(
 # Routers
 # ─────────────────────────────────────────────
 
-from app.api.v1 import auth, traffic, chat, admin
+from app.modules.auth.router import router as auth_router
+from app.modules.traffic.router import router as traffic_router
+from app.modules.chat.router import router as chat_router
+from app.modules.admin.router import router as admin_router
 
-app.include_router(auth.router,    prefix="/api/v1",        tags=["Authentication"])
-app.include_router(traffic.router, prefix="/api/v1",        tags=["Traffic Monitoring"])
-app.include_router(chat.router,    prefix="/api/v1",        tags=["AI Chatbot"])
-app.include_router(admin.router,   prefix="/api/v1/admin",  tags=["Admin"])
+app.include_router(auth_router,    prefix="/api/v1",        tags=["Authentication"])
+app.include_router(traffic_router, prefix="/api/v1",        tags=["Traffic Monitoring"])
+app.include_router(chat_router,    prefix="/api/v1",        tags=["AI Chatbot"])
+app.include_router(admin_router,   prefix="/api/v1/admin",  tags=["Admin"])
 
 
 @app.get("/", include_in_schema=False)

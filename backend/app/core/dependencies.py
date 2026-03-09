@@ -1,11 +1,11 @@
 from fastapi import Depends, HTTPException, Query, WebSocket, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.core.database import get_db
 from app.core.security import decode_token
-from app.models.user import User
-from sqlalchemy import select
+from app.modules.auth.models import User
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -38,15 +38,7 @@ async def get_current_user_ws(
     token: str = Query(..., description="JWT token — gửi qua ?token=<jwt>"),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Dependency dành cho WebSocket — auth qua query param ?token=...
-
-    WebSocket không hỗ trợ custom HTTP headers trong trình duyệt
-    (browser không cho phép đặt Authorization header khi kết nối WS),
-    nên phải truyền token qua query param.
-
-    Ví dụ:
-        ws://localhost:8000/api/v1/ws/roads/Đường Láng/frames?token=eyJ...
-    """
+    """Dependency dành cho WebSocket — auth qua query param ?token=..."""
     try:
         payload = decode_token(token)
         user_id = payload["user_id"]
