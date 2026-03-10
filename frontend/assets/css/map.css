@@ -1,1 +1,86 @@
-#map { height: 100vh; width: 100vw; }
+/* ============================================================
+   map.css — Map Page
+   ============================================================ */
+body {
+    margin: 0;
+    padding: 0;
+    background: #020617;
+    font-family: 'Inter', sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+#map {
+    flex: 1;
+    width: 100%;
+    filter: brightness(0.92);
+}
+
+/* Leaflet dark popup */
+.leaflet-popup-content-wrapper {
+    background: #0f172a !important;
+    border: 1px solid rgba(56, 189, 248, 0.2) !important;
+    border-radius: 12px !important;
+    color: #e2e8f0 !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-popup-tip {
+    background: #0f172a !important;
+}
+
+.leaflet-popup-close-button {
+    color: #94a3b8 !important;
+}
+
+.popup-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #38bdf8;
+    margin-bottom: 10px;
+}
+
+.popup-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: #94a3b8;
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.popup-row:last-child {
+    border-bottom: none;
+}
+
+.popup-val {
+    color: #e2e8f0;
+    font-weight: 500;
+}
+
+.popup-status {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+
+.popup-status.clear {
+    background: rgba(52, 211, 153, 0.15);
+    color: #34d399;
+}
+
+.popup-status.busy {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+}
+
+.popup-status.jammed {
+    background: rgba(248, 113, 113, 0.15);
+    color: #f87171;
+}

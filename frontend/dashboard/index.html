@@ -2,38 +2,40 @@
 <html lang="vi">
 
 <head>
-
-<meta charset="UTF-8">
-
-<title>Smart Traffic Dashboard</title>
-
-<link rel="stylesheet" href="/assets/css/dashboard.css">
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — Smart Traffic</title>
+    <link rel="stylesheet" href="/assets/css/navbar.css">
+    <link rel="stylesheet" href="/assets/css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
 
-<header class="topbar">
+    <div id="navbar-container"></div>
 
-<h2>🚦 Smart Traffic Dashboard</h2>
+    <div class="page-content">
 
-</header>
+        <p class="section-title">📹 Camera Monitoring</p>
+        <div id="roads-grid"></div>
 
-<h3>Camera Monitoring</h3>
+        <p class="section-title">📈 Traffic Chart</p>
+        <div class="chart-container">
+            <div class="chart-header">
+                <span class="chart-title">Mật độ phương tiện theo thời gian</span>
+                <span class="chart-badge" id="chart-road-label">Chọn tuyến đường</span>
+            </div>
+            <canvas id="trafficChart" height="100"></canvas>
+        </div>
 
-<div id="roads-grid"></div>
+    </div>
 
-<h3>Traffic Chart</h3>
-
-<canvas id="trafficChart" width="400" height="200"></canvas>
-
-<script src="/assets/js/auth.js"></script>
-<script src="/assets/js/api.js"></script>
-<script src="/assets/js/utils.js"></script>
-<script src="/assets/js/websocket.js"></script>
-<script src="/assets/js/dashboard.js"></script>
+    <script src="/assets/js/auth.js"></script>
+    <script src="/assets/js/api.js"></script>
+    <script src="/assets/js/utils.js"></script>
+    <script src="/assets/js/websocket.js"></script>
+    <script src="/assets/js/dashboard.js"></script>
 
 </body>
+
 </html>

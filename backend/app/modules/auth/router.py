@@ -44,19 +44,12 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
 
     access_token = create_access_token(user_id=user.id, role=user.role)
 
-    # redirect tới dashboard
+    # Redirect về frontend kèm token trong URL param.
+    # Frontend JS sẽ đọc ?token=... và lưu vào localStorage,
+    # sau đó gửi qua Authorization: Bearer header cho mọi request.
+    # Cách này hoạt động tốt với cross-origin (5500 → 8000) và WebSocket.
     response = RedirectResponse(
-        url=f"{settings.URL_FRONTEND}/dashboard"
-    )
-
-    # set cookie JWT
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=False,      # production -> True (HTTPS)
-        samesite="lax",
-        max_age=60 * 60 * 24
+        url=f"{settings.URL_FRONTEND}/dashboard/?token={access_token}"
     )
 
     return response

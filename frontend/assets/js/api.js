@@ -1,18 +1,32 @@
-async function api(url,options={}){
+/**
+ * api.js — Fetch wrapper gửi Authorization: Bearer token từ localStorage
+ */
 
-    options.credentials="include"
+const _API_BASE = "http://localhost:8000/api/v1";
 
-    const res=await fetch(
-        "http://localhost:8000/api/v1"+url,
-        options
-    )
+async function api(url, options = {}) {
+    const token = getToken(); // từ auth.js
 
-    if(!res.ok){
+    // Merge headers
+    options.headers = {
+        ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(options.headers || {}),
+    };
 
-        throw new Error("API error")
+    const res = await fetch(_API_BASE + url, options);
 
+    if (res.status === 401) {
+        clearToken();
+        window.location.href = "/";
+        throw new Error("Unauthorized");
     }
 
-    return res.json()
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Lỗi không xác định" }));
+        throw new Error(err.detail || "API error");
+    }
 
+    if (res.status === 204) return null;
+    return res.json();
 }
