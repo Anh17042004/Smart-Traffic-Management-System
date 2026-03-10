@@ -1,3 +1,4 @@
+from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from app.core.config import settings
 
@@ -17,7 +18,7 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency injection: inject DB session vào route handler.
     
     Dùng trong FastAPI:
@@ -30,10 +31,10 @@ async def get_db() -> AsyncSession:
 
 async def create_tables():
     """Tạo tất cả bảng trong DB (dùng khi startup, thay thế Alembic trong dev nhanh)."""
-    from app.models.base import Base
+    from app.core.base import Base
     # Import tất cả models để Base biết cần tạo bảng nào
     import app.models.user   # noqa
-    import app.models.chat   # noqa
+    import app.models.chat_history   # noqa
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

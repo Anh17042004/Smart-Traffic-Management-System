@@ -8,9 +8,9 @@ sys.path.append(".")
 
 # ✅ Import đúng
 from app.core.config import settings
-from app.models.base import Base
-import app.models.user   # noqa — để Alembic thấy bảng users
-import app.models.chat   # noqa — để Alembic thấy bảng chat_history
+from app.core.base import Base
+import app.modules.auth.models   # noqa — để Alembic thấy bảng users
+import app.modules.chat.models   # noqa — để Alembic thấy bảng chat_history
 
 config = context.config
 

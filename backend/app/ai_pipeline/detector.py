@@ -9,6 +9,8 @@ Thay đổi so với code cũ:
   - Đổi tên class cho rõ ràng hơn
 """
 import os
+import logging
+logging.getLogger("ultralytics").setLevel(logging.ERROR)
 from abc import abstractmethod
 from datetime import datetime
 
@@ -20,7 +22,7 @@ from ultralytics import solutions
 
 from app.core.config import settings, road_config
 from app.utils.transport_utils import avg_none_zero_batch, convert_frame_to_byte
-
+import time
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
@@ -61,6 +63,8 @@ class RoadDetectorBase:
             conf=conf,
             meter_per_pixel=meter_per_pixel,
             max_hist=20,
+            fps=20
+         
         )
 
         self.region = region
@@ -100,6 +104,9 @@ class RoadDetectorBase:
         self.color_motor = (0, 0, 255)
         self.color_car = (255, 0, 0)
         self.color_region = (0, 255, 255)
+
+        # Frame size chuẩn cho model predict
+        self.target_size = road_config.TARGET_SIZE # (width, height) cho cv2.resize
 
         # Tracking state
         self.ids = None
@@ -146,9 +153,9 @@ class RoadDetectorBase:
             self.ids_old.clear()
 
     def process_single_frame(self, frame_input: np.ndarray):
-        """Xử lý 1 frame: YOLO inference → post-processing → draw."""
+        """Xử lý 1 frame: resize chuẩn → YOLO inference → post-processing → draw."""
         try:
-            self.frame_output = frame_input
+            self.frame_output = cv2.resize(frame_input, self.target_size)
             self.frame_predict = self.frame_output[self.roi_y_start:, self.roi_x_start:]
             self.speed_tool.process(self.frame_predict.copy())
             self.post_processing()
@@ -165,6 +172,9 @@ class RoadDetectorBase:
 
         track_data = self.speed_tool.track_data
         speeds_dict = self.speed_tool.spd
+
+        if track_data.id is None:
+            return
 
         ids = track_data.id.cpu().numpy().astype(np.int32)
         classes = track_data.cls.cpu().numpy().astype(np.int32)
@@ -236,10 +246,16 @@ class RoadDetectorBase:
                     class_id = self.classes[idx]
                     speed_id = self.speeds.get(track_id, 0)
                     color = self.color_motor if class_id == 1 else self.color_car
+                    label = f"ID:{track_id} {speed_id} km/h"
+
                     cv2.putText(
-                        self.frame_predict, f"{speed_id} km/h",
-                        (int(cx[idx]) - 50, int(cy[idx]) - 15),
-                        self.font, self.font_scale, color, self.font_thickness
+                        self.frame_predict,
+                        label,
+                        (int(cx[idx]) - 60, int(cy[idx]) - 15),
+                        self.font,
+                        self.font_scale,
+                        color,
+                        self.font_thickness
                     )
                     cv2.circle(self.frame_predict, (int(cx[idx]), int(cy[idx])), 5, color, -1)
 
@@ -255,16 +271,42 @@ class RoadDetectorBase:
         if not cam.isOpened():
             print(f"Không thể mở video: {self.path_video}")
             return
-
-        target_size = (600, 400)
+        video_fps = cam.get(cv2.CAP_PROP_FPS)
+        if video_fps <= 0:
+            video_fps = 25
+        frame_delay = 1 / video_fps
         try:
             while True:
+                start_time = time.time()
+
                 check, cap = cam.read()
                 if not check:
                     cam.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     continue
 
-                cap = cv2.resize(cap, target_size)
+                time_now = datetime.now()
+                delta = (time_now - self.time_pre_for_fps).total_seconds()
+                fps = round(1 / delta) if delta > 0 else 0
+                self.time_pre_for_fps = time_now
+
+                cvzone.putTextRect(
+                    cap, f"FPS: {fps}", (516, 20),
+                    scale=1.1, thickness=2,
+                    colorT=(0, 255, 100), colorR=(50, 50, 50),
+                    border=2, colorB=(255, 255, 255)
+                )
+
+                self.process_single_frame(cap)
+
+                # sync fps video
+                elapsed = time.time() - start_time
+                sleep_time = frame_delay - elapsed
+
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+                if not check:
+                    cam.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    continue
 
                 time_now = datetime.now()
                 delta = (time_now - self.time_pre_for_fps).total_seconds()
@@ -312,7 +354,12 @@ class RoadDetector(RoadDetectorBase):
     def update_for_frame(self):
         """Ghi frame hiện tại (dạng bytes) vào frame_dict để API đọc."""
         try:
-            self.frame_dict["frame"] = self.frame_output
+            # Encode NumPy array sang JPEG ngay trong child process!
+            # Tiết kiệm chi phí serialize (IPC pickle array 1MB xuống còn string bytes ~50KB)
+            # và giải phóng Main process không phải encode liên tục.
+            success, jpeg = cv2.imencode('.jpg', self.frame_output, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            if success:
+                self.frame_dict["frame"] = jpeg.tobytes()
         except Exception as e:
             print(f"Lỗi update_for_frame {self.name}: {e}")
 

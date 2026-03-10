@@ -1,126 +1,125 @@
-"""
-api/v1/chat.py
-Refactored từ api_chatbot.py cũ.
+from typing import List
 
-Endpoints:
-  POST /chat              → gửi tin nhắn, nhận response (yêu cầu auth)
-  GET  /chat/history      → lịch sử chat từ DB
-  DELETE /chat/history    → xóa lịch sử
-  WS   /ws/chat           → WebSocket chat realtime
-"""
 from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-from app.api.v1.dependencies import get_current_user, get_current_user_ws
+from app.core.dependencies import get_current_user, get_current_user_ws
 from app.core.database import get_db
 from app.models.user import User
-from app.repositories import chat_repo
+from app.models.chat_history import ChatHistory
+
 from app.schemas.chat import ChatRequest, ChatResponse, ChatHistoryItem
 
-router = APIRouter()
-
+router: APIRouter = APIRouter()
 
 def _get_agent(request: Request):
-    """Lấy ChatBotAgent từ app.state (được khởi tạo trong lifespan)."""
+    """
+    Lấy ChatBotAgent từ app.state
+    """
     return request.app.state.chatbot
 
 
-# ─────────────────────────────────────────────
-# REST Endpoints
-# ─────────────────────────────────────────────
-
-@router.post("/chat", response_model=ChatResponse, summary="Chat với AI (cần đăng nhập)")
+@router.post("/", response_model=ChatResponse,summary="Chat với AI (cần đăng nhập)")
 async def chat(
-    body: ChatRequest,
-    request: Request,
-    current_user: User = Depends(get_current_user),
+    body: ChatRequest, 
+    request: Request, 
+    current_user: User = Depends(get_current_user), 
     db: AsyncSession = Depends(get_db),
-):
-    """Gửi tin nhắn tới AI Agent và nhận phản hồi.
+) -> ChatResponse:
 
-    Context chat được giữ theo user_id (InMemorySaver trong RAM).
-    Tin nhắn và phản hồi được lưu vào DB (chat_history).
-    """
     agent = _get_agent(request)
+    try:
+        data = await agent.get_response(
+            body.message,
+            user_id=current_user.id,
+            db=db
+        )
+    except Exception as e:
 
-    # Lưu tin nhắn của user
-    await chat_repo.save_message(db, current_user.id, "user", body.message)
+        error_msg: str = str(e)
 
-    # Gọi agent
-    data = await agent.get_response(body.message, user_id=current_user.id)
-
-    # Lưu phản hồi của assistant
-    await chat_repo.save_message(db, current_user.id, "assistant", data["message"])
+        if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+            reply = "⚠️ Hệ thống AI đang quá tải (hết quota API). Vui lòng thử lại sau vài phút."
+        else:
+            reply = f"❌ Lỗi AI: {error_msg[:200]}" # pyre-ignore
+        data = {"message": reply, "image": None}
 
     return ChatResponse(**data)
 
 
-@router.get("/chat/history", response_model=list[ChatHistoryItem], summary="Lịch sử chat")
+# Chat History
+@router.get("/history", response_model=List[ChatHistoryItem], summary="Lịch sử chat")
 async def get_history(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     limit: int = 50,
 ):
-    """Trả về lịch sử chat gần nhất của user từ DB."""
-    return await chat_repo.get_history(db, current_user.id, limit=limit)
+
+    result = await db.execute(
+        select(ChatHistory)
+        .where(ChatHistory.user_id == current_user.id)
+        .order_by(ChatHistory.id.desc())
+        .limit(limit)
+    )
+
+    rows = list(reversed(result.scalars().all()))
+
+    return rows
 
 
-@router.delete("/chat/history", summary="Xóa lịch sử chat")
+@router.delete(
+    "/history",
+    summary="Xóa lịch sử chat"
+)
 async def clear_history(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Xóa toàn bộ lịch sử chat của user trong DB."""
-    count = await chat_repo.clear_history(db, current_user.id)
-    return {"message": f"Đã xóa {count} tin nhắn."}
+
+    result = await db.execute(
+        ChatHistory.__table__.delete()
+        .where(ChatHistory.user_id == current_user.id)
+    )
+    await db.commit()
+    return {"message": f"Đã xóa {result.rowcount} tin nhắn."}
 
 
-# ─────────────────────────────────────────────
-# WebSocket
-# ─────────────────────────────────────────────
-
+# WebSocket Chat
 @router.websocket("/ws/chat")
 async def ws_chat(
     websocket: WebSocket,
     current_user: User = Depends(get_current_user_ws),
     db: AsyncSession = Depends(get_db),
 ):
-    """WebSocket chat realtime.
 
-    Client gửi:  {"message": "Đường Láng thế nào?"}
-    Server trả:  {"message": "...", "image": "url hoặc null"}
-
-    Auth: ws://localhost:8000/api/v1/ws/chat?token=<jwt>
-    """
     agent = websocket.app.state.chatbot
-    await websocket.accept()
-
+    await websocket.accept()  # xác nhận kết nối ws
     try:
         while True:
-            data = await websocket.receive_json()
-            user_message = data.get("message", "").strip()
-
+            data = await websocket.receive_json()  # nhận message từ client
+            user_message: str = data.get("message", "").strip()
             if not user_message:
-                await websocket.send_json({"message": "Vui lòng nhập tin nhắn.", "image": None})
+                await websocket.send_json({
+                    "message": "Vui lòng nhập tin nhắn.",
+                    "image": None
+                })
                 continue
-
-            # Lưu tin nhắn user
-            await chat_repo.save_message(db, current_user.id, "user", user_message)
-
-            # Gọi agent
-            response = await agent.get_response(user_message, user_id=current_user.id)
-
-            # Lưu phản hồi
-            await chat_repo.save_message(db, current_user.id, "assistant", response["message"])
-
+            response = await agent.get_response(
+                user_message,
+                user_id=current_user.id,
+                db=db
+            )
             await websocket.send_json(response)
-
     except WebSocketDisconnect:
         pass
     except Exception as e:
         print(f"WS chat error: {e}")
         try:
-            await websocket.send_json({"message": f"Lỗi: {str(e)}", "image": None})
-        except:
+            await websocket.send_json({
+                "message": f"Lỗi: {str(e)}",
+                "image": None
+            })
+        except Exception:
             pass
         await websocket.close()

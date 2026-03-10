@@ -43,13 +43,9 @@ async def upsert(
     name: str,
     avatar_url: str | None = None,
 ) -> User:
-    """Tạo mới nếu chưa có, cập nhật name/avatar nếu đã có.
-    
-    Dùng trong callback sau khi Google trả về user info.
-    """
+    """Tạo mới nếu chưa có, cập nhật name/avatar nếu đã có."""
     user = await get_by_google_id(db, google_id)
     if user:
-        # Cập nhật thông tin mới nhất từ Google (avatar, tên có thể thay đổi)
         user.name = name
         user.avatar_url = avatar_url
         await db.commit()
@@ -77,7 +73,7 @@ async def get_all(db: AsyncSession) -> list[User]:
 
 
 async def delete(db: AsyncSession, user_id: int) -> bool:
-    """Xóa user theo id. Trả về True nếu xóa thành công."""
+    """Xóa user theo id."""
     user = await get_by_id(db, user_id)
     if not user:
         return False

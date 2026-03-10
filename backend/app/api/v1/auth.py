@@ -7,15 +7,15 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import oauth, create_access_token
-from app.repositories import user_repo
-from app.schemas.auth import UserOut, TokenResponse
-from app.api.v1.dependencies import get_current_user
+from app.services.auth import auth_services
+from app.schemas.user import UserOut, TokenResponse
+from app.core.dependencies import get_current_user
 from app.models.user import User
 
 router = APIRouter()
 
 
-@router.get("/auth/google")
+@router.get("/google")
 async def login_google(request: Request):
     """Redirect sang trang đăng nhập Google.
     
@@ -25,7 +25,7 @@ async def login_google(request: Request):
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
-@router.get("/auth/google/callback")
+@router.get("/google/callback")
 async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
     """Google gọi về đây sau khi user đăng nhập.
     
@@ -55,30 +55,23 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
     avatar_url = user_info.get("picture")
 
     # Upsert user vào DB
-    user = await user_repo.upsert(db, google_id, email, name, avatar_url)
+    user = await auth_services.upsert(db, google_id, email, name, avatar_url)
 
     # Tạo JWT token
     access_token = create_access_token(user_id=user.id, role=user.role)
 
     # Redirect về frontend kèm token trong query param
-    frontend_url = f"{settings.URL_FRONTEND}/auth/callback?token={access_token}"
+    frontend_url = f"{settings.URL_FRONTEND}/auth/callback.html?token={access_token}"
     return RedirectResponse(url=frontend_url)
 
 
-@router.get("/auth/me", response_model=UserOut)
+@router.get("/me", response_model=UserOut)
 async def get_me(current_user: User = Depends(get_current_user)):
-    """Trả về thông tin user hiện tại từ JWT token.
-    
-    Frontend dùng để kiểm tra login status và lấy thông tin user.
-    """
+    # """Trả về thông tin user hiện tại từ JWT token."
     return current_user
 
 
-@router.post("/auth/logout")
+@router.post("/logout")
 async def logout():
-    """Đăng xuất.
-    
-    Vì JWT là stateless, server không cần làm gì.
-    Frontend tự xóa token khỏi localStorage.
-    """
-    return {"message": "Đăng xuất thành công. Vui lòng xóa token phía client."}
+    # đăng xuất
+    return {"message": "Đăng xuất thành công."}

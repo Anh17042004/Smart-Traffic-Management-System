@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Chat — Smart Traffic</title>
+  <link rel="stylesheet" href="../assets/css/navbar.css">
+  <link rel="stylesheet" href="../assets/css/chat.css">
+</head>
+
+<body>
+
+  <div id="navbar-container"></div>
+
+  <div class="chat-layout">
+
+    <div class="chat-header">
+      <div class="chat-header-icon">🤖</div>
+      <div class="chat-header-info">
+        <h2>AI Traffic Assistant</h2>
+        <div class="chat-online">
+          <div class="chat-online-dot"></div>
+          <p>Trực tuyến · Hỗ trợ tiếng Việt</p>
+        </div>
+      </div>
+      <button class="clear-btn" id="clearBtn">🗑 Xóa lịch sử</button>
+    </div>
+
+    <div id="messages"></div>
+
+    <div class="chat-input-area">
+      <div class="chat-input-wrap">
+        <textarea id="input" rows="1" placeholder="Hỏi về tình trạng giao thông... (Enter để gửi)"></textarea>
+        <button id="send">➤</button>
+      </div>
+      <p class="chat-hint">Enter để gửi · Shift+Enter xuống dòng · Dữ liệu real-time từ camera</p>
+    </div>
+
+  </div>
+
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/auth.js"></script>
+  <script src="../assets/js/api.js"></script>
+  <script src="../assets/js/utils.js"></script>
+  <script src="../assets/js/chat.js"></script>
+
+</body>
+
+</html>
