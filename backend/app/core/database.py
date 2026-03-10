@@ -1,3 +1,4 @@
+from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from app.core.config import settings
 
@@ -17,7 +18,7 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency injection: inject DB session vào route handler.
     
     Dùng trong FastAPI:

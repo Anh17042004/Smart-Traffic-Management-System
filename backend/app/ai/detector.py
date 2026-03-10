@@ -61,6 +61,8 @@ class RoadDetectorBase:
             conf=conf,
             meter_per_pixel=meter_per_pixel,
             max_hist=20,
+            fps=20
+         
         )
 
         self.region = region
@@ -100,6 +102,9 @@ class RoadDetectorBase:
         self.color_motor = (0, 0, 255)
         self.color_car = (255, 0, 0)
         self.color_region = (0, 255, 255)
+
+        # Frame size chuẩn cho model predict
+        self.target_size = road_config.TARGET_SIZE # (width, height) cho cv2.resize
 
         # Tracking state
         self.ids = None
@@ -146,9 +151,9 @@ class RoadDetectorBase:
             self.ids_old.clear()
 
     def process_single_frame(self, frame_input: np.ndarray):
-        """Xử lý 1 frame: YOLO inference → post-processing → draw."""
+        """Xử lý 1 frame: resize chuẩn → YOLO inference → post-processing → draw."""
         try:
-            self.frame_output = frame_input
+            self.frame_output = cv2.resize(frame_input, self.target_size)
             self.frame_predict = self.frame_output[self.roi_y_start:, self.roi_x_start:]
             self.speed_tool.process(self.frame_predict.copy())
             self.post_processing()
@@ -165,6 +170,9 @@ class RoadDetectorBase:
 
         track_data = self.speed_tool.track_data
         speeds_dict = self.speed_tool.spd
+
+        if track_data.id is None:
+            return
 
         ids = track_data.id.cpu().numpy().astype(np.int32)
         classes = track_data.cls.cpu().numpy().astype(np.int32)
@@ -256,15 +264,12 @@ class RoadDetectorBase:
             print(f"Không thể mở video: {self.path_video}")
             return
 
-        target_size = (600, 400)
         try:
             while True:
                 check, cap = cam.read()
                 if not check:
                     cam.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     continue
-
-                cap = cv2.resize(cap, target_size)
 
                 time_now = datetime.now()
                 delta = (time_now - self.time_pre_for_fps).total_seconds()

@@ -85,7 +85,7 @@ class ChatBotAgent:
         self.agent = create_agent(
             model=self.llm,
             tools=tools,
-            prompt=SYSTEM_PROMPT,
+            system_prompt=SYSTEM_PROMPT,
             response_format=ToolStrategy(ChatResponse),  # structured output
             checkpointer=self.checkpointer,              # per-user memory
         )

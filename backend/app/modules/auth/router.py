@@ -44,8 +44,22 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_db)):
 
     access_token = create_access_token(user_id=user.id, role=user.role)
 
-    frontend_url = f"{settings.URL_FRONTEND}/auth/callback?token={access_token}"
-    return RedirectResponse(url=frontend_url)
+    # redirect tới dashboard
+    response = RedirectResponse(
+        url=f"{settings.URL_FRONTEND}/dashboard"
+    )
+
+    # set cookie JWT
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=False,      # production -> True (HTTPS)
+        samesite="lax",
+        max_age=60 * 60 * 24
+    )
+
+    return response
 
 
 @router.get("/auth/me", response_model=UserOut)
