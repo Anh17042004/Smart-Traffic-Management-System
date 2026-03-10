@@ -75,8 +75,8 @@ async function loadRoads() {
 
   let roads = [];
   try {
-    const data = await api("/roads");
-    roads = data.road_names || [];
+    const data = await api("/traffic/");
+    roads = data.roads || [];
   } catch (e) {
     console.error("Không lấy được danh sách đường:", e);
     return;
@@ -93,7 +93,7 @@ async function loadRoads() {
   async function refreshAll() {
     for (const name of roads) {
       try {
-        const data = await api(`/roads/${encodeURIComponent(name)}/info`);
+        const data = await api(`/traffic/${encodeURIComponent(name)}/info`);
         const marker = markers[name];
         if (!marker) continue;
 

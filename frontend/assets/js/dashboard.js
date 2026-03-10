@@ -20,8 +20,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 2. Lấy danh sách tuyến đường
     let roads = [];
     try {
-        const data = await api("/roads");
-        roads = data.road_names || [];
+        const data = await api("/traffic/");
+        roads = data.roads || [];
     } catch (err) {
         console.error("Không lấy được danh sách đường:", err);
     }

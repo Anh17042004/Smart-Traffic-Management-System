@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.modules.auth.models import User
+from app.models.user import User
 
 
 async def get_by_google_id(db: AsyncSession, google_id: str) -> User | None:

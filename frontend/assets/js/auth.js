@@ -8,8 +8,18 @@
  *   4. WebSocket gửi ?token=<jwt> query param
  */
 
-const API_BASE = "http://localhost:8000/api/v1";
+const API_BASE = CONFIG.API_BASE;
 const TOKEN_KEY = "traffic_token";
+
+/**
+ * Redirect về trang login (index.html ở root frontend).
+ * Tính toán relative path dựa trên vị trí hiện tại.
+ */
+function goToLogin() {
+    const depth = window.location.pathname.split("/").filter(Boolean).length;
+    const prefix = depth > 0 ? "../".repeat(depth) : "./";
+    window.location.href = prefix + "index.html";
+}
 
 // ── Token helpers ──────────────────────────────
 
@@ -50,7 +60,7 @@ async function requireAuth() {
 
     const token = getToken();
     if (!token) {
-        window.location.href = "/";
+        goToLogin();
         return null;
     }
 
@@ -61,13 +71,13 @@ async function requireAuth() {
 
         if (!res.ok) {
             clearToken();
-            window.location.href = "/";
+            goToLogin();
             return null;
         }
 
         return await res.json();
     } catch {
-        window.location.href = "/";
+        goToLogin();
         return null;
     }
 }
@@ -84,7 +94,9 @@ async function loadNavbar() {
     if (!container) return;
 
     // Inject navbar HTML
-    const navRes = await fetch("/components/navbar.html");
+    const depth = window.location.pathname.split("/").filter(Boolean).length;
+    const prefix = depth > 0 ? "../".repeat(depth) : "./";
+    const navRes = await fetch(prefix + "components/navbar.html");
     container.innerHTML = await navRes.text();
 
     // Highlight active link
@@ -109,7 +121,7 @@ async function loadNavbar() {
                 headers: token ? { "Authorization": `Bearer ${token}` } : {},
             }).catch(() => { });
             clearToken();
-            window.location.href = "/";
+            goToLogin();
         });
     }
 

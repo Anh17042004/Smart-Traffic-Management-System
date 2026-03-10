@@ -81,7 +81,7 @@ async function sendMessage() {
   scrollToBottom();
 
   try {
-    const data = await api("/chat", {
+    const data = await api("/chat/", {
       method: "POST",
       body: JSON.stringify({ message: text }),
     });

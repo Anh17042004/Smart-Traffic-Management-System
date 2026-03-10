@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.core.database import get_db
 from app.core.security import decode_token
-from app.modules.auth.models import User
+from app.models.user import User
 
 bearer_scheme = HTTPBearer(auto_error=False)
 

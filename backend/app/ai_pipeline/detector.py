@@ -9,6 +9,8 @@ Thay đổi so với code cũ:
   - Đổi tên class cho rõ ràng hơn
 """
 import os
+import logging
+logging.getLogger("ultralytics").setLevel(logging.ERROR)
 from abc import abstractmethod
 from datetime import datetime
 
@@ -20,7 +22,7 @@ from ultralytics import solutions
 
 from app.core.config import settings, road_config
 from app.utils.transport_utils import avg_none_zero_batch, convert_frame_to_byte
-
+import time
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
@@ -244,10 +246,16 @@ class RoadDetectorBase:
                     class_id = self.classes[idx]
                     speed_id = self.speeds.get(track_id, 0)
                     color = self.color_motor if class_id == 1 else self.color_car
+                    label = f"ID:{track_id} {speed_id} km/h"
+
                     cv2.putText(
-                        self.frame_predict, f"{speed_id} km/h",
-                        (int(cx[idx]) - 50, int(cy[idx]) - 15),
-                        self.font, self.font_scale, color, self.font_thickness
+                        self.frame_predict,
+                        label,
+                        (int(cx[idx]) - 60, int(cy[idx]) - 15),
+                        self.font,
+                        self.font_scale,
+                        color,
+                        self.font_thickness
                     )
                     cv2.circle(self.frame_predict, (int(cx[idx]), int(cy[idx])), 5, color, -1)
 
@@ -263,10 +271,39 @@ class RoadDetectorBase:
         if not cam.isOpened():
             print(f"Không thể mở video: {self.path_video}")
             return
-
+        video_fps = cam.get(cv2.CAP_PROP_FPS)
+        if video_fps <= 0:
+            video_fps = 25
+        frame_delay = 1 / video_fps
         try:
             while True:
+                start_time = time.time()
+
                 check, cap = cam.read()
+                if not check:
+                    cam.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    continue
+
+                time_now = datetime.now()
+                delta = (time_now - self.time_pre_for_fps).total_seconds()
+                fps = round(1 / delta) if delta > 0 else 0
+                self.time_pre_for_fps = time_now
+
+                cvzone.putTextRect(
+                    cap, f"FPS: {fps}", (516, 20),
+                    scale=1.1, thickness=2,
+                    colorT=(0, 255, 100), colorR=(50, 50, 50),
+                    border=2, colorB=(255, 255, 255)
+                )
+
+                self.process_single_frame(cap)
+
+                # sync fps video
+                elapsed = time.time() - start_time
+                sleep_time = frame_delay - elapsed
+
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
                 if not check:
                     cam.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     continue

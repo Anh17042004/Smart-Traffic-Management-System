@@ -2,7 +2,7 @@
  * api.js — Fetch wrapper gửi Authorization: Bearer token từ localStorage
  */
 
-const _API_BASE = "http://localhost:8000/api/v1";
+const _API_BASE = CONFIG.API_BASE;
 
 async function api(url, options = {}) {
     const token = getToken(); // từ auth.js
@@ -18,7 +18,7 @@ async function api(url, options = {}) {
 
     if (res.status === 401) {
         clearToken();
-        window.location.href = "/";
+        goToLogin();
         throw new Error("Unauthorized");
     }
 

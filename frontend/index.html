@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Traffic System — Đăng nhập</title>
     <meta name="description" content="Hệ thống giám sát giao thông thông minh bằng AI">
-    <link rel="stylesheet" href="/assets/css/style.css">
+    <link rel="stylesheet" href="./assets/css/style.css">
 </head>
 
 <body>
@@ -28,9 +28,10 @@
         <span class="version-badge">v2.0 · DATN 2026</span>
     </div>
 
+    <script src="./assets/js/config.js"></script>
     <script>
         document.getElementById("loginBtn").onclick = () => {
-            window.location.href = "http://localhost:8000/api/v1/auth/google";
+            window.location.href = CONFIG.BACKEND_URL + "/api/v1/auth/google";
         };
     </script>
 

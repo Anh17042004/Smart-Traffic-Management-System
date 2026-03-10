@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # Video Processing
     DEVICE: str = "cpu"
-    MODELS_PATH: str = "./app/ai/model/best_int8_openvino_model"
+    MODELS_PATH: str = "./app/ai_pipeline/model/best_int8_openvino_model"
 
     class Config:
         env_file = ".env"
@@ -53,8 +53,8 @@ class RoadConfig:
     ]
 
     PATH_VIDEOS: List[str] = [
-        "./Video_test/video1.mp4",
-        "./Video_test/video2.mp4",
+        "./video/video1.mp4",
+        "./video/video2.mp4",
         # "./video_test/Nguyễn Trãi.mp4",
         # "./video_test/Ngã Tư Sở.mp4",
         # "./video_test/Đường Láng.mp4",

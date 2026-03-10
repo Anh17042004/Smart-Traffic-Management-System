@@ -18,7 +18,7 @@ function connectRoadWS(road, card, onInfo) {
 
     // ── Frame stream ──
     const wsFrame = new WebSocket(
-        `ws://localhost:8000/api/v1/ws/roads/${safeRoad}/frames${tokenParam}`
+        `${CONFIG.WS_BASE}/traffic/ws/roads/${safeRoad}/frames${tokenParam}`
     );
     wsFrame.binaryType = "blob";
 
@@ -34,13 +34,13 @@ function connectRoadWS(road, card, onInfo) {
     wsFrame.onclose = (e) => {
         if (e.code === 4001) { // custom: token invalid
             clearToken();
-            window.location.href = "/";
+            goToLogin();
         }
     };
 
     // ── Info stream ──
     const wsInfo = new WebSocket(
-        `ws://localhost:8000/api/v1/ws/roads/${safeRoad}/info${tokenParam}`
+        `${CONFIG.WS_BASE}/traffic/ws/roads/${safeRoad}/info${tokenParam}`
     );
 
     wsInfo.onmessage = (event) => {

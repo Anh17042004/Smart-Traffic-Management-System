@@ -72,6 +72,7 @@ class VideoProcessorPool:
         print(f"\nNhận signal {signum}, đang dừng các process...")
         self.cleanup_processes()
         sys.exit(0)
+        
 
     def cleanup_processes(self):
         """Terminate tất cả child processes một cách an toàn."""
@@ -95,8 +96,12 @@ class VideoProcessorPool:
         Tất cả objects YOLO được khởi tạo TRONG process con này.
         """
         try:
+            # Suppress "WARNING No tracks found." trong child process
+            import logging
+            logging.getLogger("ultralytics").setLevel(logging.ERROR)
+
             # Import trong process con (tránh pickle)
-            from app.ai.detector import RoadDetector
+            from app.ai_pipeline.detector import RoadDetector
             analyzer = RoadDetector(
                 path_video=path_video,
                 meter_per_pixel=meter_per_pixel,
@@ -160,15 +165,10 @@ class VideoProcessorPool:
                     if p.is_alive():
                         p.kill()
         print("All processes stopped.")
-
-    # ─────────────────────────────────────────────
-    # Public API — được gọi bởi api/v1/traffic.py
-    # ─────────────────────────────────────────────
-
-    def get_names(self) -> list[str]:
-        """Trả về danh sách tên tuyến đường đang được giám sát."""
+    
+    def get_names(self):
         return self.names
-
+    
     def get_frame_road(self, road_name: str) -> bytes:
         """Lấy JPEG frame hiện tại của tuyến đường.
 
@@ -182,7 +182,7 @@ class VideoProcessorPool:
             return b""
         raw = self.shared_data[road_name]["frame"].get("frame", b"")
         return raw if isinstance(raw, bytes) else b""
-
+    
     def get_info_road(self, road_name: str) -> dict:
         """Lấy thông tin phương tiện hiện tại của tuyến đường.
 
@@ -195,3 +195,4 @@ class VideoProcessorPool:
         if road_name not in self.names:
             return {}
         return dict(self.shared_data[road_name]["info"])
+
