@@ -1,4 +1,4 @@
-# 🚦 Tổng Quan Dự Án: Smart Traffic Monitoring System v2
+# 🚦 Tổng Quan Dự Án: Smart Traffic Management System
 
 ## 📝 Giới Thiệu (Project Overview)
 Hệ thống giám sát giao thông thông minh v2 là một nền tảng toàn diện kết hợp phân tích lưu lượng, đếm phương tiện cơ giới thời gian thực dựa trên các luồng video, tích hợp chặt chẽ cùng một trợ lý ảo (AI Chatbot) giúp người dùng và quản trị viên truy vấn tình trạng giao thông bằng câu lệnh tự nhiên.
