@@ -1,0 +1,4 @@
+.chat-container { max-width: 600px; margin: 40px auto; border: 1px solid #ccc; padding: 20px; border-radius: 8px; }
+#messages { min-height: 200px; margin-bottom: 10px; }
+.user { color: #007bff; }
+.bot { color: #333; }

@@ -1,104 +1,26 @@
-:root {
-  --bg-dark: #0f172a;
-  --bg-card: rgba(30, 41, 59, 0.7);
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --accent-cyan: #06b6d4;
-  --accent-green: #10b981;
-  --accent-red: #ef4444;
-  --border-color: rgba(255, 255, 255, 0.1);
+body{
+
+background:#0f172a;
+color:white;
+font-family:Arial;
+
+display:flex;
+justify-content:center;
+align-items:center;
+
+height:100vh;
+
 }
 
-body {
-  background-color: var(--bg-dark);
-  color: var(--text-main);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  min-height: 100vh;
+.login-box{
+
+text-align:center;
+
 }
 
-/* Glassmorphism Classes */
-.glass-card {
-  background: var(--bg-card);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
+button{
 
-.glass-nav {
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border-color);
-}
+padding:10px 20px;
+font-size:16px;
 
-/* Typography & Links */
-a {
-  color: var(--accent-cyan);
-  text-decoration: none;
-  transition: all 0.2s;
-}
-a:hover {
-  color: #22d3ee;
-  text-shadow: 0 0 8px rgba(6, 182, 212, 0.5);
-}
-
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: var(--bg-dark);
-}
-::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #475569;
-}
-
-/* Utilities */
-.text-cyan { color: var(--accent-cyan) !important; }
-.text-green { color: var(--accent-green) !important; }
-.text-red { color: var(--accent-red) !important; }
-.border-cyan { border-color: var(--accent-cyan) !important; }
-
-/* Pulse animation */
-.pulse-glow {
-  animation: pulse-border 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-@keyframes pulse-border {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
-  50% { box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.3); }
-}
-
-/* Login Page Specific */
-.login-container {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
-}
-
-.btn-cyberpunk {
-  background: transparent;
-  color: var(--accent-cyan);
-  border: 1px solid var(--accent-cyan);
-  border-radius: 8px;
-  padding: 12px 24px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.btn-cyberpunk:hover {
-  background: rgba(6, 182, 212, 0.1);
-  box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
-  color: #fff;
 }
